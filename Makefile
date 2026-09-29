@@ -229,13 +229,10 @@ cloudflared-deb: cloudflared cloudflared.1
 cloudflared-rpm: cloudflared cloudflared.1
 	$(call build_package,rpm)
 
-ifeq ($(TARGET_ARCH), amd64)
-	WIXL_ARCH ?= -a x64 --define Platform=x64
-else ifeq ($(TARGET_ARCH), arm64)
-	WIXL_ARCH ?= -a arm64 --define Platform=arm64
-else
-	WIXL_ARCH ?= -a x86 --define Platform=x86
-endif
+WIXL_ARCH_amd64 := -a x64 --define Platform=x64
+WIXL_ARCH_arm64 := -a arm64 --define Platform=arm64
+WIXL_ARCH_386   := -a x86 --define Platform=x86
+WIXL_ARCH ?= $(or $(WIXL_ARCH_$(strip $(TARGET_ARCH))),-a x64 --define Platform=x64)
 
 .PHONY: cloudflared-msi
 cloudflared-msi:
