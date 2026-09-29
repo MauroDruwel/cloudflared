@@ -90,10 +90,11 @@ jobs:
           if [ "$dots" -eq 1 ]; then MSI_VERSION="${MSI_VERSION}.0"; fi
           
           echo "Converting cloudflared.wxs to WiX v4/v5..."
-          wix convert cloudflared.wxs
+          wix convert cloudflared.wxs || true
           
           echo "Building cloudflared-windows-arm64.msi with version ${MSI_VERSION}..."
           wix build -arch arm64 -d Platform=arm64 -d Version="${MSI_VERSION}" -d Path=./cloudflared.exe cloudflared.wxs -o dist/cloudflared-windows-arm64.msi
+          ls -lh dist/cloudflared-windows-arm64.*
 
       - name: Update Release Notes with Checksums
         run: |
