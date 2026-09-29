@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   build-and-release:
-    name: Build & Release Windows Binaries
+    name: Build Windows ARM64 & Publish Release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -38,10 +38,10 @@ jobs:
           go-version: 'stable'
           cache: true
 
-      - name: Install packaging tools (msitools)
+      - name: Install packaging tools (wixl)
         run: |
           sudo apt-get update
-          sudo apt-get install -y msitools
+          sudo apt-get install -y wixl
 
       - name: Determine Release Version
         id: get_version
@@ -59,9 +59,17 @@ jobs:
           echo "RELEASE_TAG=${VERSION}" >> $GITHUB_ENV
           echo "Selected version: ${VERSION}"
 
-      - name: Build Windows ARM64 (.exe and .msi)
+      - name: Download Official Cloudflare Release Assets
         run: |
           mkdir -p dist
+          echo "Fetching upstream release assets for ${VERSION}..."
+          gh release download "${VERSION}" --repo cloudflare/cloudflared --dir dist/ || echo "Upstream assets download skipped or partial"
+          gh release view "${VERSION}" --repo cloudflare/cloudflared --json body -q .body > body.txt || echo "### Release ${VERSION}" > body.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Windows ARM64 (.exe and .msi)
+        run: |
           BUILD_DATE=$(date -u '+%Y-%m-%d-%H:%M UTC')
           
           echo "Building cloudflared-windows-arm64.exe for ${VERSION}..."
@@ -70,7 +78,7 @@ jobs:
             -o dist/cloudflared-windows-arm64.exe \
             github.com/cloudflare/cloudflared/cmd/cloudflared
 
-          # Build MSI installer using wixl
+          # Build Windows ARM64 MSI installer using wixl
           cp dist/cloudflared-windows-arm64.exe ./cloudflared.exe
           MSI_VERSION=$(echo "${VERSION}" | grep -oE '^[0-9]+(\.[0-9]+){1,2}' || echo "1.0.0")
           dots=$(echo "${MSI_VERSION}" | tr -cd '.' | wc -c)
@@ -79,44 +87,51 @@ jobs:
           echo "Building cloudflared-windows-arm64.msi with version ${MSI_VERSION}..."
           wixl -a arm64 --define Platform=arm64 --define Version="${MSI_VERSION}" --define Path=./cloudflared.exe --output dist/cloudflared-windows-arm64.msi cloudflared.wxs || echo "MSI generation skipped or failed"
 
-      - name: Build Windows AMD64 (.exe and .msi)
+      - name: Update Release Notes with Checksums
         run: |
-          BUILD_DATE=$(date -u '+%Y-%m-%d-%H:%M UTC')
-          
-          echo "Building cloudflared-windows-amd64.exe for ${VERSION}..."
-          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -mod=readonly \
-            -ldflags="-X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_DATE}' -s -w" \
-            -o dist/cloudflared-windows-amd64.exe \
-            github.com/cloudflare/cloudflared/cmd/cloudflared
+          python3 - << 'EOF'
+          import hashlib, os
 
-          # Build MSI installer using wixl
-          cp dist/cloudflared-windows-amd64.exe ./cloudflared.exe
-          MSI_VERSION=$(echo "${VERSION}" | grep -oE '^[0-9]+(\.[0-9]+){1,2}' || echo "1.0.0")
-          dots=$(echo "${MSI_VERSION}" | tr -cd '.' | wc -c)
-          if [ "$dots" -eq 1 ]; then MSI_VERSION="${MSI_VERSION}.0"; fi
-          
-          echo "Building cloudflared-windows-amd64.msi with version ${MSI_VERSION}..."
-          wixl -a x64 --define Platform=x64 --define Version="${MSI_VERSION}" --define Path=./cloudflared.exe --output dist/cloudflared-windows-amd64.msi cloudflared.wxs || echo "MSI generation skipped or failed"
+          def get_sha256(path):
+              h = hashlib.sha256()
+              with open(path, 'rb') as f:
+                  while chunk := f.read(8192):
+                      h.update(chunk)
+              return h.hexdigest()
 
-      - name: Generate Checksums
-        run: |
-          cd dist
-          for f in *; do
-            if [ -f "$f" ]; then
-              sha256sum "$f" > "${f}.sha256"
-            fi
-          done
-          sha256sum * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          entries = []
+          exe_path = 'dist/cloudflared-windows-arm64.exe'
+          msi_path = 'dist/cloudflared-windows-arm64.msi'
+
+          if os.path.exists(exe_path):
+              entries.append(f"cloudflared-windows-arm64.exe: {get_sha256(exe_path)}\n")
+          if os.path.exists(msi_path):
+              entries.append(f"cloudflared-windows-arm64.msi: {get_sha256(msi_path)}\n")
+
+          content = ""
+          if os.path.exists('body.txt'):
+              with open('body.txt', 'r', encoding='utf-8') as f:
+                  content = f.read()
+
+          if '```' in content:
+              idx = content.rfind('```')
+              content = content[:idx] + "".join(entries) + content[idx:]
+          else:
+              content = content + "\n### Windows ARM64 Checksums:\n```\n" + "".join(entries) + "```\n"
+
+          with open('body.txt', 'w', encoding='utf-8') as f:
+              f.write(content)
+          EOF
+          cat body.txt
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: Release ${{ env.VERSION }}
+          name: ${{ env.VERSION }}
           draft: ${{ github.event.inputs.draft == 'true' }}
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          body_path: body.txt
           files: dist/*
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

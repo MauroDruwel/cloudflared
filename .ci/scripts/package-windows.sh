@@ -14,7 +14,7 @@ export BUILT_ARTIFACT_DIR=artifacts/
 export FINAL_ARTIFACT_DIR=artifacts/
 mkdir -p $BUILT_ARTIFACT_DIR
 mkdir -p $FINAL_ARTIFACT_DIR
-windowsArchs=("amd64" "386" "arm64")
+windowsArchs=("amd64" "386")
 for arch in ${windowsArchs[@]}; do
     export TARGET_ARCH=$arch
     # Copy .exe from artifacts directory
