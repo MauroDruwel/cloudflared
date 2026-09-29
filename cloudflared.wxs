@@ -20,7 +20,7 @@
         Manufacturer="cloudflare"
         Language="1033">
 
-        <Package InstallerVersion="200" Compressed="yes" Comments="Windows Installer Package" InstallScope="perMachine" />
+        <Package InstallerVersion="500" Compressed="yes" Comments="Windows Installer Package" InstallScope="perMachine" />
 
         <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
 
@@ -49,7 +49,7 @@
                     Value="[INSTALLDIR]"
                     Permanent="no"
                     Part="last"
-                    Action="create"
+                    Action="set"
                     System="yes" />
             </Component>
         </Directory>
