@@ -229,9 +229,17 @@ cloudflared-deb: cloudflared cloudflared.1
 cloudflared-rpm: cloudflared cloudflared.1
 	$(call build_package,rpm)
 
+ifeq ($(TARGET_ARCH), amd64)
+	WIXL_ARCH ?= -a x64 --define Platform=x64
+else ifeq ($(TARGET_ARCH), arm64)
+	WIXL_ARCH ?= -a arm64 --define Platform=arm64
+else
+	WIXL_ARCH ?= -a x86 --define Platform=x86
+endif
+
 .PHONY: cloudflared-msi
 cloudflared-msi:
-	wixl --define Version=$(VERSION) --define Path=$(EXECUTABLE_PATH) --output cloudflared-$(VERSION)-$(TARGET_ARCH).msi cloudflared.wxs
+	wixl $(WIXL_ARCH) --define Version=$(VERSION) --define Path=$(EXECUTABLE_PATH) --output cloudflared-$(VERSION)-$(TARGET_ARCH).msi cloudflared.wxs
 
 .PHONY: github-release-dryrun
 github-release-dryrun:

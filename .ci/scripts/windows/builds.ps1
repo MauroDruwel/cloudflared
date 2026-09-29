@@ -32,5 +32,19 @@ $env:CGO_ENABLED = 0
 & make cloudflared
 if ($LASTEXITCODE -ne 0) { throw "Failed to build cloudflared for 386" }
 ## Sign build
-azuresigntool.exe sign -kvu $env:KEY_VAULT_URL -kvi "$env:KEY_VAULT_CLIENT_ID" -kvs "$env:KEY_VAULT_SECRET" -kvc "$env:KEY_VAULT_CERTIFICATE" -kvt "$env:KEY_VAULT_TENANT_ID" -tr "$TIMESTAMP_RFC3161" -d "Cloudflare Tunnel Daemon" .\cloudflared.exe
+if ($env:KEY_VAULT_URL) {
+    azuresigntool.exe sign -kvu $env:KEY_VAULT_URL -kvi "$env:KEY_VAULT_CLIENT_ID" -kvs "$env:KEY_VAULT_SECRET" -kvc "$env:KEY_VAULT_CERTIFICATE" -kvt "$env:KEY_VAULT_TENANT_ID" -tr "$TIMESTAMP_RFC3161" -d "Cloudflare Tunnel Daemon" .\cloudflared.exe
+}
 copy .\cloudflared.exe .\artifacts\cloudflared-windows-386.exe
+
+Write-Output "Building for arm64"
+$env:TARGET_ARCH = "arm64"
+$env:LOCAL_ARCH = "arm64"
+$env:CGO_ENABLED = 0
+& make cloudflared
+if ($LASTEXITCODE -ne 0) { throw "Failed to build cloudflared for arm64" }
+## Sign build
+if ($env:KEY_VAULT_URL) {
+    azuresigntool.exe sign -kvu $env:KEY_VAULT_URL -kvi "$env:KEY_VAULT_CLIENT_ID" -kvs "$env:KEY_VAULT_SECRET" -kvc "$env:KEY_VAULT_CERTIFICATE" -kvt "$env:KEY_VAULT_TENANT_ID" -tr "$TIMESTAMP_RFC3161" -d "Cloudflare Tunnel Daemon" .\cloudflared.exe
+}
+copy .\cloudflared.exe .\artifacts\cloudflared-windows-arm64.exe

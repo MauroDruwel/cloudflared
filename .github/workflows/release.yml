@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version / tag (e.g. 2026.9.3). Leave empty to use git tag or latest upstream.'
+        required: false
+        default: ''
+      draft:
+        description: 'Publish as draft release'
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Publish as prerelease'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release Windows Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Install packaging tools (msitools)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y msitools
+
+      - name: Determine Release Version
+        id: get_version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || curl -s https://api.github.com/repos/cloudflare/cloudflared/releases/latest | jq -r .tag_name)
+            VERSION="${LATEST_TAG#v}"
+          fi
+
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "RELEASE_TAG=${VERSION}" >> $GITHUB_ENV
+          echo "Selected version: ${VERSION}"
+
+      - name: Build Windows ARM64 (.exe and .msi)
+        run: |
+          mkdir -p dist
+          BUILD_DATE=$(date -u '+%Y-%m-%d-%H:%M UTC')
+          
+          echo "Building cloudflared-windows-arm64.exe for ${VERSION}..."
+          GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -mod=readonly \
+            -ldflags="-X main.Version=${VERSION} -X main.BuildTime=${BUILD_DATE} -s -w" \
+            -o dist/cloudflared-windows-arm64.exe \
+            github.com/cloudflare/cloudflared/cmd/cloudflared
+
+          # Build MSI installer using wixl
+          cp dist/cloudflared-windows-arm64.exe ./cloudflared.exe
+          MSI_VERSION=$(echo "${VERSION}" | grep -oE '^[0-9]+(\.[0-9]+){1,2}' || echo "1.0.0")
+          dots=$(echo "${MSI_VERSION}" | tr -cd '.' | wc -c)
+          if [ "$dots" -eq 1 ]; then MSI_VERSION="${MSI_VERSION}.0"; fi
+          
+          echo "Building cloudflared-windows-arm64.msi with version ${MSI_VERSION}..."
+          wixl -a arm64 --define Platform=arm64 --define Version="${MSI_VERSION}" --define Path=./cloudflared.exe --output dist/cloudflared-windows-arm64.msi cloudflared.wxs || echo "MSI generation skipped or failed"
+
+      - name: Build Windows AMD64 (.exe and .msi)
+        run: |
+          BUILD_DATE=$(date -u '+%Y-%m-%d-%H:%M UTC')
+          
+          echo "Building cloudflared-windows-amd64.exe for ${VERSION}..."
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -mod=readonly \
+            -ldflags="-X main.Version=${VERSION} -X main.BuildTime=${BUILD_DATE} -s -w" \
+            -o dist/cloudflared-windows-amd64.exe \
+            github.com/cloudflare/cloudflared/cmd/cloudflared
+
+          # Build MSI installer using wixl
+          cp dist/cloudflared-windows-amd64.exe ./cloudflared.exe
+          MSI_VERSION=$(echo "${VERSION}" | grep -oE '^[0-9]+(\.[0-9]+){1,2}' || echo "1.0.0")
+          dots=$(echo "${MSI_VERSION}" | tr -cd '.' | wc -c)
+          if [ "$dots" -eq 1 ]; then MSI_VERSION="${MSI_VERSION}.0"; fi
+          
+          echo "Building cloudflared-windows-amd64.msi with version ${MSI_VERSION}..."
+          wixl -a x64 --define Platform=x64 --define Version="${MSI_VERSION}" --define Path=./cloudflared.exe --output dist/cloudflared-windows-amd64.msi cloudflared.wxs || echo "MSI generation skipped or failed"
+
+      - name: Generate Checksums
+        run: |
+          cd dist
+          for f in *; do
+            if [ -f "$f" ]; then
+              sha256sum "$f" > "${f}.sha256"
+            fi
+          done
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Release ${{ env.VERSION }}
+          draft: ${{ github.event.inputs.draft == 'true' }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          files: dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

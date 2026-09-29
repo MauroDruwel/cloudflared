@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 
-<?if $(var.Platform)="x64" ?>
+<?if $(var.Platform)="x64" or $(var.Platform)="arm64" ?>
     <?define Program_Files="ProgramFiles64Folder"?>
 <?else ?>
     <?define Program_Files="ProgramFilesFolder"?>
