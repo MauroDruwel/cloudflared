@@ -25,7 +25,10 @@ permissions:
 jobs:
   build-and-release:
     name: Build Windows ARM64 & Publish Release
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,10 +41,11 @@ jobs:
           go-version: 'stable'
           cache: true
 
-      - name: Install packaging tools (wixl)
+      - name: Install WiX Toolset
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wixl
+          dotnet tool install --global wix
+          echo "$USERPROFILE/.dotnet/tools" >> $GITHUB_PATH
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: Determine Release Version
         id: get_version
@@ -70,6 +74,7 @@ jobs:
 
       - name: Build Windows ARM64 (.exe and .msi)
         run: |
+          export PATH="$PATH:$USERPROFILE/.dotnet/tools:$HOME/.dotnet/tools"
           BUILD_DATE=$(date -u '+%Y-%m-%d-%H:%M UTC')
           
           echo "Building cloudflared-windows-arm64.exe for ${VERSION}..."
@@ -78,14 +83,17 @@ jobs:
             -o dist/cloudflared-windows-arm64.exe \
             github.com/cloudflare/cloudflared/cmd/cloudflared
 
-          # Build Windows ARM64 MSI installer using wixl
+          # Build Windows ARM64 MSI installer using WiX
           cp dist/cloudflared-windows-arm64.exe ./cloudflared.exe
           MSI_VERSION=$(echo "${VERSION}" | grep -oE '^[0-9]+(\.[0-9]+){1,2}' || echo "1.0.0")
           dots=$(echo "${MSI_VERSION}" | tr -cd '.' | wc -c)
           if [ "$dots" -eq 1 ]; then MSI_VERSION="${MSI_VERSION}.0"; fi
           
+          echo "Converting cloudflared.wxs to WiX v4/v5..."
+          wix convert cloudflared.wxs
+          
           echo "Building cloudflared-windows-arm64.msi with version ${MSI_VERSION}..."
-          wixl -a arm64 --define Platform=arm64 --define Version="${MSI_VERSION}" --define Path=./cloudflared.exe --output dist/cloudflared-windows-arm64.msi cloudflared.wxs || echo "MSI generation skipped or failed"
+          wix build -arch arm64 -d Platform=arm64 -d Version="${MSI_VERSION}" -d Path=./cloudflared.exe cloudflared.wxs -o dist/cloudflared-windows-arm64.msi
 
       - name: Update Release Notes with Checksums
         run: |
