@@ -3,11 +3,21 @@ name: Check
 jobs:
   check:
     strategy:
+      fail-fast: false
       matrix:
-        go-version: [1.22.x]
+        go-version: ['stable']
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
+    - name: Configure Linux Ping Permissions
+      if: runner.os == 'Linux'
+      run: sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"
+    - name: Prepare Windows Temp Dir
+      if: runner.os == 'Windows'
+      run: mkdir -p /tmp
     - name: Install Go
       uses: actions/setup-go@v5
       with:

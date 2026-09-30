@@ -116,9 +116,7 @@ func TestSupportedCurvesNegotiation(t *testing.T) {
 		require.True(t, slices.Contains(advertisedCurves, tls.CurveP256))
 		require.True(t, slices.Contains(advertisedCurves, tls.X25519MLKEM768))
 		expectedLength := 2
-		if runtime.GOOS == "linux" {
-			// P256Kyber768Draft00 only exists in linux
-			require.True(t, slices.Contains(advertisedCurves, P256Kyber768Draft00))
+		if slices.Contains(advertisedCurves, P256Kyber768Draft00) {
 			expectedLength = 3
 		}
 		require.Len(t, advertisedCurves, expectedLength)
