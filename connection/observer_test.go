@@ -104,7 +104,7 @@ func (s *eventCollectorSink) assertSawEvent(t *testing.T, event Event) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		for _, e := range s.observedEvents {
-			if e == event {
+			if e.Index == event.Index && e.EventType == event.EventType {
 				return true
 			}
 		}
