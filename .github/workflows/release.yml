@@ -79,7 +79,7 @@ jobs:
           
           echo "Building cloudflared-windows-arm64.exe for ${VERSION}..."
           GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -mod=readonly \
-            -ldflags="-X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_DATE}' -s -w" \
+            -ldflags="-X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_DATE}'" \
             -o dist/cloudflared-windows-arm64.exe \
             github.com/cloudflare/cloudflared/cmd/cloudflared
 
