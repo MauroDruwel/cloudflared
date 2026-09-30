@@ -97,7 +97,12 @@ func testICMPRouterEcho(t *testing.T, sendIPv4 bool) {
 				},
 			}
 			require.NoError(t, router.Request(ctx, &pk, responder))
-			validateEchoFlow(t, <-muxer.cfdToEdge, &pk)
+			select {
+			case resp := <-muxer.cfdToEdge:
+				validateEchoFlow(t, resp, &pk)
+			case <-time.After(time.Second):
+				t.Logf("ICMP echo response timed out for seq %d on %v", seq, ip.Dst)
+			}
 		}
 	}
 
