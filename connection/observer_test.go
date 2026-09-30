@@ -100,7 +100,14 @@ func (s *eventCollectorSink) OnTunnelEvent(event Event) {
 }
 
 func (s *eventCollectorSink) assertSawEvent(t *testing.T, event Event) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	assert.Contains(t, s.observedEvents, event)
+	assert.Eventually(t, func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, e := range s.observedEvents {
+			if e == event {
+				return true
+			}
+		}
+		return false
+	}, time.Second, 10*time.Millisecond)
 }
