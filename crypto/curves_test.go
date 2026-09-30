@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"slices"
 	"testing"
 
